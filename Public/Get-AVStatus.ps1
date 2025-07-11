@@ -247,6 +247,7 @@ function Get-AVStatus {
 
         }
     }
+    Write-Host "[*] Results:" -ForegroundColor Cyan
     $Drivers | ForEach-Object {
         $FileName = $_.Name
         if ($Edrs.ContainsKey($FileName)) {

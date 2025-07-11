@@ -10,6 +10,11 @@
 
 [CmdletBinding()]
 param()
+
+# CHANGE OPTIONS HERE
+$options = New-PSSessionOption -SkipCACheck -SkipCNCheck
+$UseSSL = $true # set to FALSE to use HTTP over tcp/3985
+
 function Test-Targets {
 
     param (
@@ -17,6 +22,7 @@ function Test-Targets {
         [string]$TargetsFile = $null,
         [Parameter(Mandatory = $true)] [string]$OutputFile,
         [Parameter(Mandatory = $true)][PSCredential]$Credential,
+        [string]$DomainController,
         [switch]$Force
     )
 
@@ -24,18 +30,19 @@ function Test-Targets {
     Write-Verbose  "Targets file: $TargetsFile"
     Write-Verbose  "Output File: $OutputFile"
     Write-Verbose  "Username: $($Credential.UserName)"
+    Write-Verbose "Domain Controller IP: $DomainController"
 
     if (-not $Targets -and (-not $TargetsFile -or -not (Test-Path $TargetsFile))) {
         Write-Error "Provide either a Targets array, either a valid TargetFile"
         return
     }
 
-    if ($TargetsFile -and $Targets){
+    if ($TargetsFile -and $Targets) {
         Write-Error "Provide only a Targets array or a valid TargetFile"
         return
     }
 
-    if ($TargetsFile -and -not $Targets){
+    if ($TargetsFile -and -not $Targets) {
         $Targets = Get-Content $TargetsFile
     }
 
@@ -51,6 +58,35 @@ function Test-Targets {
     $Jobs = @{}
     $moduleInfo = Get-Module FigJuicer
 
+    if ($DomainController) {
+        # Create a specific job for the Domain parsing
+        $Job = Start-Job -ArgumentList $DomainController, $Credential, $VerbosePreference, $moduleInfo.Path -ScriptBlock {
+            param(
+                [string]$DomainController,
+                [PSCredential]$Credential,
+                $vp,
+                $mp
+            )
+
+            Import-Module $mp -Verbose:$false
+            $VerbosePreference = $vp
+            # Function logic here
+            Write-Verbose  "[*] Domain Controller $DomainController - Connection..."
+            try {
+                Get-ADStatus -Credential $Credential -DomainController $DomainController
+            }
+            catch {
+                Write-Warning  "[-] $DomainController - Error"
+                Write-Verbose  "[-] $DomainController - Reason: $_"
+            }
+        }
+        $Jobs["DC"] = @{
+            Job    = $Job
+            Target = "Domain"
+        }
+    }
+
+
     # Start a job per target
     foreach ($Target in $Targets) {
         Write-Verbose "Starting job for target $Target"
@@ -62,13 +98,12 @@ function Test-Targets {
                 $mp
             )
 
+            Import-Module $mp -Verbose:$false
             $VerbosePreference = $vp
-            Import-Module $mp
             # Function logic here
             Write-Verbose  "[*] $Target - Connection..."
             try {
-                $options = New-PSSessionOption -SkipCACheck -SkipCNCheck
-                $Session = New-PSSession -ComputerName $Target -Credential $Credential -ErrorAction Stop -UseSSL -SessionOption $options
+                $Session = New-PSSession -ComputerName $Target -Credential $Credential -ErrorAction Stop -UseSSL:$UseSSL -SessionOption $options
                 Write-Verbose  "[+] $Target - Connected"
             }
             catch {

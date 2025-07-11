@@ -38,6 +38,21 @@ Get-TargetList -TargetsFile "ranges_file.txt" -OutputFile "single_ip_file.txt"
 -`TargetsFile`: file with target IPs/ranges
 -`OutputFile`: file to save expanded single IPs
 
+### [OPTIONAL] Test PSSession compability
+- PSSession connection to your targets might need some configuration
+```powershell
+# Input your credentials
+$cred = Get-Credential
+# Vanilla, HTTP on tcp/5985
+$s = New-PSSession -Credential $cred -ComputerName 192.168.56.10
+# SSL, tcp/5986
+$s = New-PSSession -Credential $cred -ComputerName 192.168.56.10 -UseSSL
+# SSL with options to ignore self-signed certificate and CN check
+$options=New-PSSessionOption -SkipCACheck -SkipCNCheck
+$s = New-PSSession -Credential $cred -ComputerName 192.168.56.10 -UseSSL -SessionOption $options
+```
+- Once you found the proper configuration, edit the first lines of `Test-Targets.ps1` in accordance.
+
 ### Juice targets
 ```powershell
 $Credential = Get-Credential
@@ -47,6 +62,9 @@ Test-Targets -Credential $Credential -OutputFile "global_output.txt" -Targets $T
 
 # Or using targets file
 Test-Targets -Credential $Credential -OutputFile "global_output.txt" -TargetsFile "single_ip_file.txt"
+
+# Including AD tests
+Test-Targets -Credential $Credential -OutputFile "global_output.txt" -TargetsFile "single_ip_file.txt"  -DomainController $DCIP
 ```
 - Provide either `-Targets` or `-TargetsFile`
 - `-Credential`: Credentials to connect to remote machines using WinRM (`PSSession`), acquire interactively using the following
