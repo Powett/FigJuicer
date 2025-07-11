@@ -1,16 +1,13 @@
-# FigJuicer
+<p align="center"><img src="./figjuicer.png" width="256" alt="FigJuicer"></p>
 
-![FigJuicer Icon](./icon.png)
+<h1 align="center">FigJuicer</h1>
 
+<p align="center">PowerShell toolkit squeezing configuration of remote Windows targets to extract potential vulnerabilities. Currently supports various Active Directory domain checks, BitLocker status and AV/EDR enumeration.</p>
+
+<hr>
 ---
 
-## About
-
-**FigJuicer** is a PowerShell toolkit squeezing configuration of remote Windows targets to extract potential vulnerabilities. Currently supports various Active Directory domain checks, BitLocker status and AV/EDR enumeration.
-
----
-
-## Prerequisites
+# Prerequisites
 
 - PowerShell 5.1 or later (PowerShell 7+ recommended)  
 - FigJuicer module imported
@@ -18,14 +15,14 @@
 
 ---
 
-## Usage
-### Import module
+# Usage
+## Import module
 ```powershell
 Import-Module FigJuicer
 ```
 
-### Juice all 'figs
-#### Prepare targets List
+## Juice all 'figs
+### Prepare targets List
 
 Parses a target file containing:
 - Single IPv4s: `192.168.0.1`
@@ -41,7 +38,7 @@ Get-TargetList -TargetsFile "ranges_file.txt" -OutputFile "single_ip_file.txt"
 -`TargetsFile`: file with target IPs/ranges
 -`OutputFile`: file to save expanded single IPs
 
-#### Juice targets
+### Juice targets
 ```powershell
 $Credential = Get-Credential
 
@@ -58,7 +55,7 @@ $cred = Get-Credential
 ```
 - `-OutputFile`: location of results
 
-### Juice a single 'fig
+## Juice a single 'fig
 
 Single checks can be performed by passing a `Target` and a `PSSession` to the following functions:
 ```powershell
@@ -71,7 +68,7 @@ Get-AVStatus -Session $Session
 # Exception for AD 'fig, use credentials & IP
 Get-ADStatus -Credential $Credential -DomainController $DomainControllerIP
 ```
-## Notes
+# Notes
 Credentials must have proper permissions:
 - All remote, non-AD tests require WinRM privileges on the targeted machines
 - AD tests require LDAP connection to the Domain controller (non-privileged)
