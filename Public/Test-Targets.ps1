@@ -13,7 +13,6 @@ param()
 
 # CHANGE OPTIONS HERE
 $options = New-PSSessionOption -SkipCACheck -SkipCNCheck
-$UseSSL = $true # set to FALSE to use HTTP over tcp/3985
 
 function Test-Targets {
 
@@ -23,7 +22,8 @@ function Test-Targets {
         [Parameter(Mandatory = $true)] [string]$OutputFile,
         [Parameter(Mandatory = $true)][PSCredential]$Credential,
         [string]$DomainController,
-        [switch]$Force
+        [switch]$Force,
+        [switch]$UseSSL=$false
     )
 
     Write-Verbose  "Targets: $Targets"

@@ -16,6 +16,13 @@
 ---
 
 # Usage
+## TLDR
+```powershell
+Import-Module .\FigJuicer.psm1
+Get-TargetList -TargetsFile "ranges.txt" -OutputFile "parsed_ips.txt"
+Test-Targets -Credential $(Get-Credential) -OutputFile "output.txt" -TargetsFile "parsed_ips.txt"
+Get-Content "output.txt"
+```
 ## Import module
 ```powershell
 Import-Module .\FigJuicer.psm1
@@ -51,7 +58,7 @@ $s = New-PSSession -Credential $cred -ComputerName 192.168.56.10 -UseSSL
 $options=New-PSSessionOption -SkipCACheck -SkipCNCheck
 $s = New-PSSession -Credential $cred -ComputerName 192.168.56.10 -UseSSL -SessionOption $options
 ```
-- Once you found the proper configuration, edit the first lines of `Test-Targets.ps1` in accordance.
+- Once you found the proper configuration, edit the first lines of `Test-Targets.ps1` in accordance, and add `-UseSSL` argument if necessary.
 
 ### Juice targets
 ```powershell
