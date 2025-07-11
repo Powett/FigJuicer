@@ -35,12 +35,12 @@ function Get-TargetList {
 
     if (-Not (Test-Path $TargetsFile)) {
         Write-Error "Targets file '$TargetsFile' does not exist."
-        exit 1
+        return
     }
 
     if ((Test-Path $OutputFile) -and -not $Force) {
         Write-Warning "Output file '$OutputFile' already exists. Use -Force to overwrite."
-        exit 1
+        return    
     }
     elseif ((Test-Path $OutputFile) -and $Force) {
         Write-Verbose  "Overwriting existing output file '$OutputFile'"

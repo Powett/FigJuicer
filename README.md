@@ -18,7 +18,7 @@
 # Usage
 ## Import module
 ```powershell
-Import-Module FigJuicer
+Import-Module .\FigJuicer.psm1
 ```
 
 ## Juice all 'figs
