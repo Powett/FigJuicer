@@ -41,8 +41,8 @@ and transforms it to a list of single IPs, ready to be used by other tools. Erro
 ```powershell
 Get-TargetList -TargetsFile "ranges_file.txt" -OutputFile "single_ip_file.txt"
 ```
--`TargetsFile`: file with target IPs/ranges
--`OutputFile`: file to save expanded single IPs
+- `-TargetsFile`: file with target IPs/ranges
+- `-OutputFile`: file to save expanded single IPs
 
 ### [OPTIONAL] Test PSSession compability
 - PSSession connection to your targets might need some configuration
@@ -54,7 +54,7 @@ $s = New-PSSession -Credential $cred -ComputerName 192.168.56.10
 # SSL, tcp/5986
 $s = New-PSSession -Credential $cred -ComputerName 192.168.56.10 -UseSSL
 # SSL with options to ignore self-signed certificate and CN check
-$options=New-PSSessionOption -SkipCACheck -SkipCNCheck
+$options = New-PSSessionOption -SkipCACheck -SkipCNCheck
 $s = New-PSSession -Credential $cred -ComputerName 192.168.56.10 -UseSSL -SessionOption $options
 ```
 - Once you found the proper configuration, edit the first lines of `Test-Targets.ps1` in accordance, and add `-UseSSL` argument if necessary.
