@@ -40,7 +40,7 @@ function Get-AVStatus {
             Get-CimInstance -Namespace "root/SecurityCenter2" -ClassName AntiVirusProduct -ErrorAction Stop
         }
         catch {
-            Write-Warning  "[$ComputerName] WMI Security method failed"
+            Write-Host  "[$ComputerName] WMI Security method failed" -ForegroundColor Yellow
             Write-Verbose  "[$ComputerName] Reason: $_"
         }
     }
@@ -66,7 +66,7 @@ function Get-AVStatus {
             Get-ChildItem -Path $RegPath -ErrorAction Stop
         }
         catch {
-            Write-Warning  "[$ComputerName] Registry method failed"
+            Write-Host  "[$ComputerName] Registry method failed" -ForegroundColor Yellow
             Write-Verbose  "[$ComputerName] Reason: $_"
         }
     }
@@ -99,7 +99,7 @@ function Get-AVStatus {
             Get-Process | Where-Object { $_.Name -match $KnownProcPatterns } -ErrorAction Stop
         }
         catch {
-            Write-Warning  "[$ComputerName] Known processes method failed"
+            Write-Host  "[$ComputerName] Known processes method failed" -ForegroundColor Yellow
             Write-Verbose  "[$ComputerName] Reason: $_"
 
         }
@@ -126,7 +126,7 @@ function Get-AVStatus {
             Get-Service | Where-Object { $_.Name -match $KnownSvcPatterns } -ErrorAction Stop
         }
         catch {
-            Write-Warning  "[$ComputerName] Known services method failed"
+            Write-Host  "[$ComputerName] Known services method failed" -ForegroundColor Yellow
             Write-Verbose  "[$ComputerName] Reason: $_"
         }
     }
@@ -242,7 +242,7 @@ function Get-AVStatus {
             $VerbosePreference = $vp
         }
         catch {
-            Write-Warning  "[$ComputerName] Drivers method failed"
+            Write-Host  "[$ComputerName] Drivers method failed" -ForegroundColor Yellow
             Write-Verbose  "[$ComputerName] Reason: $_"
 
         }

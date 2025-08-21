@@ -11,8 +11,6 @@
 [CmdletBinding()]
 param()
 
-# CHANGE OPTIONS HERE
-$options = New-PSSessionOption -SkipCACheck -SkipCNCheck
 
 function Test-Targets {
 
@@ -38,7 +36,7 @@ function Test-Targets {
     }
 
     if ($TargetsFile -and $Targets) {
-        Write-Error "Provide only a Targets array or a valid TargetFile"
+        Write-Error "Provide only a Targets array or a valid TargetsFile"
         return
     }
 
@@ -103,11 +101,15 @@ function Test-Targets {
             # Function logic here
             Write-Verbose  "[*] $Target - Connection..."
             try {
-                $Session = New-PSSession -ComputerName $Target -Credential $Credential -ErrorAction Stop -UseSSL:$UseSSL -SessionOption $options
+                # CHANGE OPTIONS HERE
+                $options = New-PSSessionOption -SkipCACheck -SkipCNCheck
+                
+                $Session = New-PSSession -ComputerName $Target -Credential $Credential -ErrorAction Stop -UseSSL:$UseSSL -SessionOption:$options
                 Write-Verbose  "[+] $Target - Connected"
             }
             catch {
                 Write-Warning "[$($Target)] Could not connect as $($Credential.UserName)"
+                Write-Verbose "Reason: $_"
                 return
             }
             try {

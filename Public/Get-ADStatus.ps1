@@ -117,7 +117,7 @@ function Get-ADStatus {
 
     Write-Output "========== Users that are privileged and have SPNs =========="
     $Users | ForEach-Object { 
-        Write-Output $_.SamAccountName, $_.ServicePrincipalName
+        Write-Output "$($_.samAccountName) => $($_.ServicePrincipalName[0]),..."
     }
     
     # --- Users trusted for delegation
