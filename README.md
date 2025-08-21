@@ -5,7 +5,6 @@
 <p align="center">PowerShell toolkit squeezing configuration of remote Windows targets to extract potential vulnerabilities. Currently supports various Active Directory domain checks, BitLocker status and AV/EDR enumeration.</p>
 
 <hr>
----
 
 # Prerequisites
 
@@ -16,7 +15,7 @@
 ---
 
 # Usage
-## TLDR
+## TL;DR
 ```powershell
 Import-Module .\FigJuicer.psm1
 Get-TargetList -TargetsFile "ranges.txt" -OutputFile "parsed_ips.txt"
