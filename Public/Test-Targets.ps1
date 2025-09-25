@@ -102,13 +102,16 @@ function Test-Targets {
             Write-Verbose  "[*] $Target - Connection..."
             try {
                 # CHANGE OPTIONS HERE
-                $options = New-PSSessionOption -SkipCACheck -SkipCNCheck
+                $options = New-PSSessionOption
+                $UseSSL = $false
+                # $options = New-PSSessionOption -SkipCACheck -SkipCNCheck
                 
                 $Session = New-PSSession -ComputerName $Target -Credential $Credential -ErrorAction Stop -UseSSL:$UseSSL -SessionOption:$options
                 Write-Verbose  "[+] $Target - Connected"
             }
             catch {
-                Write-Warning "[$($Target)] Could not connect as $($Credential.UserName)"
+                Write-Warning "[$($Target)] Could not connect as $($Credential.UserName) on $($Target)"
+                Write-Verbose "Options: UseSSL:$($UseSSL), Options:$($options)"
                 Write-Verbose "Reason: $_"
                 return
             }

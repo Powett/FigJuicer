@@ -46,7 +46,7 @@ function Get-AVStatus {
     }
     if ($AvWmi) {
         $AvWmi | ForEach-Object {
-            Write-Host  "[$ComputerName][+] WMI check: found $($_.displayName)." -ForegroundColor Green
+            Write-Host  "[$($Session.ComputerName)][+] WMI check: found $($_.displayName)." -ForegroundColor Green
             Write-Output  "[+] WMI check: found $($_.displayName)."
         }
         $RESULT.WMI_Method = ($AvWmi | Select-Object -ExpandProperty displayName) -join "; "
@@ -79,7 +79,7 @@ function Get-AVStatus {
     }
     if ($AvRegNames.Count) {
         $AvRegNames | ForEach-Object {
-            Write-Host  "[$ComputerName][+] Registry check: found $_." -ForegroundColor Green
+            Write-Host  "[$($Session.ComputerName)][+] Registry check: found $_." -ForegroundColor Green
             Write-Output  "[+] Registry check: found $_."
         }
         $Result.Registry_Method = $AvRegNames -join "; "
@@ -139,7 +139,7 @@ function Get-AVStatus {
     }
 
     # --------------- Driver detection ---------------
-    Write-Host  "[*] Drivers method..." -ForegroundColor Cyan
+    Write-Host  "[$($Session.ComputerName)][*] Drivers method..." -ForegroundColor Cyan
 
     # Define known EDR drivers
     $Edrs = @{
@@ -247,7 +247,7 @@ function Get-AVStatus {
 
         }
     }
-    Write-Host "[*] Results:" -ForegroundColor Cyan
+    Write-Host "[$($Session.ComputerName)][*] Results:" -ForegroundColor Cyan
     $Drivers | ForEach-Object {
         $FileName = $_.Name
         if ($Edrs.ContainsKey($FileName)) {

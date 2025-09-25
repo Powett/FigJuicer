@@ -36,29 +36,22 @@ function Get-BitLockerStatus {
             Get-BitLockerVolume -ErrorAction Stop
         }
         catch {
-            Write-Warning  "[$ComputerName][-] Get-BitLockerVolume method failed"
+            Write-Host "[$ComputerName][-] Get-BitLockerVolume method failed" -ForegroundColor Yellow
             Write-Verbose  "[$ComputerName][-] Reason: $_"
         }
     }
-    if ($Volumes) {
-        foreach ($Vol in $Volumes) {
-            $EncMethodKey = [int]$Vol.EncryptionMethod
-            $EncMethod = if ($EnumMap.ContainsKey($EncMethodKey)) {
-                $EnumMap[$EncMethodKey]
-            }
-            else {
-                "Unknown ($EncMethodKey)"
-            }
-            [PSCustomObject]@{
-                DriveLetter      = $Vol.MountPoint
-                ProtectionStatus = switch ($Vol.ProtectionStatus) {
-                    'Off' { 0 }
-                    'On' { 1 }
-                    default { 'Unknown' }
-                }
-                EncryptionMethod = $EncMethod
-            }
+    
+    $Volumes | ForEach-Object {
+        if ($_.ProtectionStatus -eq "Off" -or -not ($_.VolumeStatus -eq "FullyEncrypted")) {
+            Write-Host "[$($Session.ComputerName)][-] Get-BitLockerVolume check: $($_.MountPoint) is $($_.VolumeStatus), method: $($_.EncryptionMethod), protection status: $($_.ProtectionStatus)" -ForegroundColor Red
+            Write-Output "[-] Get-BitLockerVolume check: $($_.MountPoint) is $($_.VolumeStatus), method: $($_.EncryptionMethod), protection status: $($_.ProtectionStatus)"
         }
+        else {
+            Write-Host "[$($Session.ComputerName)][+] Get-BitLockerVolume check: $($_.MountPoint) is $($_.VolumeStatus), method: $($_.EncryptionMethod), protection status: $($_.ProtectionStatus)" -ForegroundColor Green
+            Write-Output "[+] Get-BitLockerVolume check: $($_.MountPoint) is $($_.VolumeStatus), method: $($_.EncryptionMethod), protection status: $($_.ProtectionStatus)"
+        }
+    }
+    if ($Volumes) {
         return $Volumes
     }
     Write-Verbose  "[$($Session.ComputerName)][*] Falling back to WMI Method"
@@ -74,31 +67,30 @@ function Get-BitLockerStatus {
             Get-CimInstance -Namespace "root\CIMV2\Security\MicrosoftVolumeEncryption" -ClassName Win32_EncryptableVolume -ErrorAction Stop
         }
         catch {
-            Write-Warning  "[$ComputerName][-] WMI method failed"
-            Write-Verbose  "[$ComputerName][-] Reason: $_"
+            Write-Host "[$ComputerName][-] WMI method failed" -ForegroundColor Yellow
+            Write-Verbose  "[-] Reason: $_"
+        }
+    }
+    $Volumes | ForEach-Object {
+        $EncMethodKey = [int]$_.EncryptionMethod
+        $EncMethod = if ($EnumMap.ContainsKey($EncMethodKey)) {
+            $EnumMap[$EncMethodKey]
+        }
+        else {
+            "Unknown ($EncMethodKey)"
+        }
+        if ($_.ProtectionStatus -eq 0 -or -not ($_.ConversionStatus -eq 1)) {
+            Write-Output "[$($Session.ComputerName)][-] WMI check: $($_.DriveLetter) conversion status: $($_.ConversionStatus), method: $($EncMethod), protection status: $($_.ProtectionStatus)"
+            Write-Host "[-] WMI check: $($_.DriveLetter) conversion status $($_.ConversionStatus), method: $($EncMethod), protection status: $($_.ProtectionStatus)" -ForegroundColor Red
+        }
+        else {
+            Write-Output "[$($Session.ComputerName)][+] WMI check: $($_.DriveLetter) conversion status: $($_.ConversionStatus), method: $($EncMethod), protection status: $($_.ProtectionStatus)"
+            Write-Host "[+] WMI check: $($_.DriveLetter) conversion status $($_.ConversionStatus), method: $($EncMethod), protection status: $($_.ProtectionStatus)" -ForegroundColor Green        
         }
     }
     if ($Volumes) {
-        foreach ($Vol in $Volumes) {
-            $EncMethodKey = [int]$Vol.EncryptionMethod
-            $EncMethod = if ($EnumMap.ContainsKey($EncMethodKey)) {
-                $EnumMap[$EncMethodKey]
-            }
-            else {
-                "Unknown ($EncMethodKey)"
-            }
-            [PSCustomObject]@{
-                DriveLetter      = $Vol.DriveLetter
-                ProtectionStatus = switch ($Vol.ProtectionStatus) {
-                    0 { 'Off' }
-                    1 { 'On' }
-                    default { 'Unknown' }
-                }
-                EncryptionMethod = $EncMethod
-            } | Format-Table
-        }
         return $Volumes
-    }
+    }   
     Write-Host  "[$($Session.ComputerName)][-] BitLocker likely disabled" -ForegroundColor Red
     Write-Output  "[-] BitLocker likely disabled"
 }

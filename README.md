@@ -58,6 +58,13 @@ $options = New-PSSessionOption -SkipCACheck -SkipCNCheck
 $s = New-PSSession -Credential $cred -ComputerName 192.168.56.10 -UseSSL -SessionOption $options
 ```
 - Once you found the proper configuration, edit the first lines of `Test-Targets.ps1` in accordance, and add `-UseSSL` argument if necessary.
+- If using HTTP (port 3985), it might be needed to add the host(s) to trusted list:
+```powershell
+# start winrm service
+# open shell as admin
+# add trusted (supports *)
+Set-Item wsman:\localhost\Client\TrustedHosts -Value "$MACHINES"
+```
 
 ### Juice targets
 ```powershell
