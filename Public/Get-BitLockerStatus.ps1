@@ -12,7 +12,8 @@ param()
 function Get-BitLockerStatus {
     # Helper to translate EncryptionMethod codes
     param (
-        [Parameter(Mandatory = $true)][System.Management.Automation.Runspaces.PSSession]$Session
+        [System.Management.Automation.Runspaces.PSSession]$Session,
+        [string]$SessionName
     )
 
     $EnumMap = @{
@@ -25,8 +26,15 @@ function Get-BitLockerStatus {
         6 = "XTS AES 128"
         7 = "XTS AES 256"
     }
-    # --------------- Get-BitLockerVolume Method ---------------
-    $Volumes = Invoke-Command -Session $Session -ArgumentList $VerbosePreference, $Session.ComputerName { 
+    if (-not $Session -and -not $SessionName) {
+        $SessionName = "localhost"
+    }
+    if ( $Session ) {
+        $SessionName = $Session.ComputerName
+    }
+
+    # --------------- Get-BitLockerVolume Method ---------------    
+    $Command = { 
         param(
             $vp,
             $ComputerName
@@ -41,23 +49,32 @@ function Get-BitLockerStatus {
         }
     }
     
+    
+    $Volumes = if ($Session) {
+        Invoke-Command -Session $Session -ArgumentList $VerbosePreference, $SessionName -ScriptBlock $Command
+    }
+    else {
+        & $Command $VerbosePreference $SessionName
+    }
+
+
     $Volumes | ForEach-Object {
         if ($_.ProtectionStatus -eq "Off" -or -not ($_.VolumeStatus -eq "FullyEncrypted")) {
-            Write-Host "[$($Session.ComputerName)][-] Get-BitLockerVolume check: $($_.MountPoint) is $($_.VolumeStatus), method: $($_.EncryptionMethod), protection status: $($_.ProtectionStatus)" -ForegroundColor Red
-            Write-Output "[-] Get-BitLockerVolume check: $($_.MountPoint) is $($_.VolumeStatus), method: $($_.EncryptionMethod), protection status: $($_.ProtectionStatus)"
+            Write-Host "[$($SessionName)][-] Get-BitLockerVolume check: $($_.MountPoint) is $($_.VolumeStatus), method: $($_.EncryptionMethod), protection status: $($_.ProtectionStatus)" -ForegroundColor Red
+            Write-Output "[$($SessionName)][-] Get-BitLockerVolume check: $($_.MountPoint) is $($_.VolumeStatus), method: $($_.EncryptionMethod), protection status: $($_.ProtectionStatus)"
         }
         else {
-            Write-Host "[$($Session.ComputerName)][+] Get-BitLockerVolume check: $($_.MountPoint) is $($_.VolumeStatus), method: $($_.EncryptionMethod), protection status: $($_.ProtectionStatus)" -ForegroundColor Green
-            Write-Output "[+] Get-BitLockerVolume check: $($_.MountPoint) is $($_.VolumeStatus), method: $($_.EncryptionMethod), protection status: $($_.ProtectionStatus)"
+            Write-Host "[$($SessionName)][+] Get-BitLockerVolume check: $($_.MountPoint) is $($_.VolumeStatus), method: $($_.EncryptionMethod), protection status: $($_.ProtectionStatus)" -ForegroundColor Green
+            Write-Output "[$($SessionName)][+] Get-BitLockerVolume check: $($_.MountPoint) is $($_.VolumeStatus), method: $($_.EncryptionMethod), protection status: $($_.ProtectionStatus)"
         }
     }
     if ($Volumes) {
         return $Volumes
     }
-    Write-Verbose  "[$($Session.ComputerName)][*] Falling back to WMI Method"
+    Write-Verbose  "[$($SessionName)][*] Falling back to WMI Method"
     
     # --------------- Fallback WMI Method ---------------
-    $Volumes = Invoke-Command -Session $Session -ArgumentList $VerbosePreference, $Session.ComputerName { 
+    $Command = { 
         param(
             $vp,
             $ComputerName
@@ -68,9 +85,16 @@ function Get-BitLockerStatus {
         }
         catch {
             Write-Host "[$ComputerName][-] WMI method failed" -ForegroundColor Yellow
-            Write-Verbose  "[-] Reason: $_"
+            Write-Verbose  "[$ComputerName][-] Reason: $_"
         }
     }
+    $Volumes = if ($Session) {
+        Invoke-Command -Session $Session -ArgumentList $VerbosePreference, $SessionName -ScriptBlock $Command
+    }
+    else {
+        & $Command $VerbosePreference $SessionName
+    }
+
     $Volumes | ForEach-Object {
         $EncMethodKey = [int]$_.EncryptionMethod
         $EncMethod = if ($EnumMap.ContainsKey($EncMethodKey)) {
@@ -80,17 +104,17 @@ function Get-BitLockerStatus {
             "Unknown ($EncMethodKey)"
         }
         if ($_.ProtectionStatus -eq 0 -or -not ($_.ConversionStatus -eq 1)) {
-            Write-Output "[$($Session.ComputerName)][-] WMI check: $($_.DriveLetter) conversion status: $($_.ConversionStatus), method: $($EncMethod), protection status: $($_.ProtectionStatus)"
-            Write-Host "[-] WMI check: $($_.DriveLetter) conversion status $($_.ConversionStatus), method: $($EncMethod), protection status: $($_.ProtectionStatus)" -ForegroundColor Red
+            Write-Output "[$($SessionName)][-] WMI check: $($_.DriveLetter) conversion status: $($_.ConversionStatus), method: $($EncMethod), protection status: $($_.ProtectionStatus)"
+            Write-Host "[$($SessionName)][-] WMI check: $($_.DriveLetter) conversion status $($_.ConversionStatus), method: $($EncMethod), protection status: $($_.ProtectionStatus)" -ForegroundColor Red
         }
         else {
-            Write-Output "[$($Session.ComputerName)][+] WMI check: $($_.DriveLetter) conversion status: $($_.ConversionStatus), method: $($EncMethod), protection status: $($_.ProtectionStatus)"
-            Write-Host "[+] WMI check: $($_.DriveLetter) conversion status $($_.ConversionStatus), method: $($EncMethod), protection status: $($_.ProtectionStatus)" -ForegroundColor Green        
+            Write-Output "[$($SessionName)][+] WMI check: $($_.DriveLetter) conversion status: $($_.ConversionStatus), method: $($EncMethod), protection status: $($_.ProtectionStatus)"
+            Write-Host "[$($SessionName)][+] WMI check: $($_.DriveLetter) conversion status $($_.ConversionStatus), method: $($EncMethod), protection status: $($_.ProtectionStatus)" -ForegroundColor Green        
         }
     }
     if ($Volumes) {
         return $Volumes
     }   
-    Write-Host  "[$($Session.ComputerName)][-] BitLocker likely disabled" -ForegroundColor Red
-    Write-Output  "[-] BitLocker likely disabled"
+    Write-Host  "[$($SessionName)][-] BitLocker likely disabled" -ForegroundColor Red
+    Write-Output "[$($SessionName)][-] BitLocker likely disabled"
 }

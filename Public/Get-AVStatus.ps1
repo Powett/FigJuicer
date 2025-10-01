@@ -17,8 +17,9 @@ param()
 function Get-AVStatus {
     # Returns an object with detected AV info locally, including registry subkeys and driver detection
     # Helper to translate EncryptionMethod codes
-    param (       
-        [Parameter(Mandatory = $true)][System.Management.Automation.Runspaces.PSSession]$Session
+    param (
+        [System.Management.Automation.Runspaces.PSSession]$Session,
+        [string]$SessionName
     )
     $Result = [PSCustomObject]@{
         WMI_Method      = ""
@@ -28,9 +29,16 @@ function Get-AVStatus {
         Drivers_Method  = ""
     }
 
+    if (-not $Session -and -not $SessionName) {
+        $SessionName = "localhost"
+    }
+    if ( $Session ) {
+        $SessionName = $Session.ComputerName
+    }
+
     # --------------- WMI Antivirus products ---------------
-    Write-Host  "[$($Session.ComputerName)][*] WMI Method..." -ForegroundColor Cyan
-    $AvWmi = Invoke-Command -Session $Session -ArgumentList $VerbosePreference, $Session.ComputerName {
+    Write-Host  "[$($SessionName)][*] WMI Method..." -ForegroundColor Cyan
+    $Command = {
         param(
             $vp,
             $ComputerName
@@ -44,18 +52,25 @@ function Get-AVStatus {
             Write-Verbose  "[$ComputerName] Reason: $_"
         }
     }
+    $AvWmi = if ($Session) {
+        Invoke-Command -Session $Session -ArgumentList $VerbosePreference, $SessionName -ScriptBlock $Command
+    }
+    else {
+        & $Command $VerbosePreference $SessionName
+    }
+
     if ($AvWmi) {
         $AvWmi | ForEach-Object {
-            Write-Host  "[$($Session.ComputerName)][+] WMI check: found $($_.displayName)." -ForegroundColor Green
-            Write-Output  "[+] WMI check: found $($_.displayName)."
+            Write-Host  "[$($SessionName)][+] WMI check: found $($_.displayName)." -ForegroundColor Green
+            Write-Output "[$($SessionName)][+] WMI check: found $($_.displayName)."
         }
         $RESULT.WMI_Method = ($AvWmi | Select-Object -ExpandProperty displayName) -join "; "
     }
 
     # --------------- Registry Antivirus providers ---------------
-    Write-Host  "[$($Session.ComputerName)][*] Registry Method..." -ForegroundColor Cyan
+    Write-Host  "[$($SessionName)][*] Registry Method..." -ForegroundColor Cyan
     $AvRegNames = @()
-    $Subkeys = Invoke-Command -Session $Session -ArgumentList $VerbosePreference, $Session.ComputerName {
+    $Command = {
         param(
             $vp,
             $ComputerName
@@ -70,6 +85,12 @@ function Get-AVStatus {
             Write-Verbose  "[$ComputerName] Reason: $_"
         }
     }
+    $Subkeys = if ($Session) {
+        Invoke-Command -Session $Session -ArgumentList $VerbosePreference, $SessionName -ScriptBlock $Command
+    }
+    else {
+        & $Command $VerbosePreference $SessionName
+    }
     foreach ($Subkey in $Subkeys) {
         try {
             $DispName = (Get-ItemProperty -Path $Subkey.PSPath -Name DisplayName -ErrorAction SilentlyContinue).DisplayName
@@ -79,16 +100,16 @@ function Get-AVStatus {
     }
     if ($AvRegNames.Count) {
         $AvRegNames | ForEach-Object {
-            Write-Host  "[$($Session.ComputerName)][+] Registry check: found $_." -ForegroundColor Green
-            Write-Output  "[+] Registry check: found $_."
+            Write-Host  "[$($SessionName)][+] Registry check: found $_." -ForegroundColor Green
+            Write-Output "[$($SessionName)][+] Registry check: found $_."
         }
         $Result.Registry_Method = $AvRegNames -join "; "
     }
 
     # --------------- Known Antivirus processes running ---------------
-    Write-Host  "[$($Session.ComputerName)][*] Process Method..." -ForegroundColor Cyan
+    Write-Host  "[$($SessionName)][*] Process Method..." -ForegroundColor Cyan
     
-    $AvProc = Invoke-Command -Session $Session -ArgumentList $VerbosePreference, $Session.ComputerName {
+    $Command = {
         param(
             $vp,
             $ComputerName
@@ -101,21 +122,27 @@ function Get-AVStatus {
         catch {
             Write-Host  "[$ComputerName] Known processes method failed" -ForegroundColor Yellow
             Write-Verbose  "[$ComputerName] Reason: $_"
-
+                
         }
     }
+    $AvProc = if ($Session) {
+        Invoke-Command -Session $Session -ArgumentList $VerbosePreference, $SessionName -ScriptBlock $Command
+    }
+    else {
+        & $Command $VerbosePreference $SessionName
+    } 
     if ($AvProc) {
         $AvProc | ForEach-Object {
-            Write-Host  "[$($Session.ComputerName)][+] Process method: found $($_.Name)." -ForegroundColor Green
-            Write-Output  "[+] Process method: found $($_.Name)."
+            Write-Host  "[$($SessionName)][+] Process method: found $($_.Name)." -ForegroundColor Green
+            Write-Output "[$($SessionName)][+] Process method: found $($_.Name)."
         }
         $Result.Process_Method = ($AvProc | Select-Object -ExpandProperty Name) -join "; "
     }
 
 
     # --------------- Known Antivirus services running ---------------
-    Write-Host  "[$($Session.ComputerName)][*] Services Method..." -ForegroundColor Cyan
-    $AvSvc = Invoke-Command -Session $Session -ArgumentList $VerbosePreference, $Session.ComputerName {
+    Write-Host  "[$($SessionName)][*] Services Method..." -ForegroundColor Cyan
+    $Command = {
         param(
             $vp,
             $ComputerName
@@ -130,16 +157,23 @@ function Get-AVStatus {
             Write-Verbose  "[$ComputerName] Reason: $_"
         }
     }
+    $AvSvc = if ($Session) {
+        Invoke-Command -Session $Session -ArgumentList $VerbosePreference, $SessionName -ScriptBlock $Command
+    }
+    else {
+        & $Command $VerbosePreference $SessionName
+        
+    }
     if ($AvSvc) {
         $AvSvc | ForEach-Object {
-            Write-Host  "[$($Session.ComputerName)][+] Service method: found $($_.Name)."  -ForegroundColor Green
-            Write-Output  "[+] Service method: found $($_.Name)." 
+            Write-Host  "[$($SessionName)][+] Service method: found $($_.Name)."  -ForegroundColor Green
+            Write-Output "[$($SessionName)][+] Service method: found $($_.Name)." 
         }
         $Result.Service_Method = ($AvSvc | Select-Object -ExpandProperty DisplayName) -join "; "
     }
 
     # --------------- Driver detection ---------------
-    Write-Host  "[$($Session.ComputerName)][*] Drivers method..." -ForegroundColor Cyan
+    Write-Host  "[$($SessionName)][*] Drivers method..." -ForegroundColor Cyan
 
     # Define known EDR drivers
     $Edrs = @{
@@ -230,7 +264,7 @@ function Get-AVStatus {
 
     $DetectedDrivers = @()
 
-    $Drivers = Invoke-Command -Session $Session -ArgumentList $VerbosePreference, $Session.ComputerName {
+    $Command = {
         param(
             $vp,
             $ComputerName
@@ -244,19 +278,25 @@ function Get-AVStatus {
         catch {
             Write-Host  "[$ComputerName] Drivers method failed" -ForegroundColor Yellow
             Write-Verbose  "[$ComputerName] Reason: $_"
-
+                
         }
     }
-    Write-Host "[$($Session.ComputerName)][*] Results:" -ForegroundColor Cyan
+    $Drivers = if ($Session) {
+        Invoke-Command -Session $Session -ArgumentList $VerbosePreference, $SessionName -ScriptBlock $Command
+    }
+    else {
+        & $Command $VerbosePreference $SessionName
+    }
+    Write-Host "[$($SessionName)][*] Results:" -ForegroundColor Cyan
     $Drivers | ForEach-Object {
         $FileName = $_.Name
         if ($Edrs.ContainsKey($FileName)) {
-            Write-Host  "[$($Session.ComputerName)][+] Driver method: found $DriverPath$FileName." -ForegroundColor Green
-            Write-Output  "[+] Driver method: found $DriverPath$FileName."
+            Write-Host  "[$($SessionName)][+] Driver method: found $DriverPath$FileName." -ForegroundColor Green
+            Write-Output "[$($SessionName)][+] Driver method: found $DriverPath$FileName."
             $DetectedDrivers += $Edrs[$FileName]
         }
         elseif ($FileName -like "EcatService*") {
-            Write-Host  "[$($Session.ComputerName)][+] Driver method: found $DriverPath$FileName." -ForegroundColor Green
+            Write-Host  "[$($SessionName)][+] Driver method: found $DriverPath$FileName." -ForegroundColor Green
             Write-Output "[+] Driver method: found $DriverPath$FileName."
             $DetectedDrivers += "RSA NetWitness Endpoint"
         }

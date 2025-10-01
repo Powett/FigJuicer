@@ -21,7 +21,8 @@ function Test-Targets {
         [Parameter(Mandatory = $true)][PSCredential]$Credential,
         [string]$DomainController,
         [switch]$Force,
-        [switch]$UseSSL=$false
+        [switch]$UseSSL = $false,
+        [string]$FailureFile = $null
     )
 
     Write-Verbose  "Targets: $Targets"
@@ -29,6 +30,7 @@ function Test-Targets {
     Write-Verbose  "Output File: $OutputFile"
     Write-Verbose  "Username: $($Credential.UserName)"
     Write-Verbose "Domain Controller IP: $DomainController"
+    Write-Verbose "Failure File: $FailureFile"
 
     if (-not $Targets -and (-not $TargetsFile -or -not (Test-Path $TargetsFile))) {
         Write-Error "Provide either a Targets array, either a valid TargetFile"
@@ -53,8 +55,14 @@ function Test-Targets {
         Remove-Item $OutputFile -Force
     }
 
+    if (-not $FailureFile) {
+        $FailureFile = "$($OutputFile)_failure"
+    }
+
     $Jobs = @{}
     $moduleInfo = Get-Module FigJuicer
+    $moduleFolder = Split-Path -Path $moduleInfo.Path -Parent
+
 
     if ($DomainController) {
         # Create a specific job for the Domain parsing
@@ -74,8 +82,8 @@ function Test-Targets {
                 Get-ADStatus -Credential $Credential -DomainController $DomainController
             }
             catch {
-                Write-Warning  "[-] $DomainController - Error"
-                Write-Verbose  "[-] $DomainController - Reason: $_"
+                Write-Warning  "[$DomainController][-] - Error"
+                Write-Verbose  "[$DomainController][-] - Reason: $_"
             }
         }
         $Jobs["DC"] = @{
@@ -85,84 +93,138 @@ function Test-Targets {
     }
 
 
-    # Start a job per target
-    foreach ($Target in $Targets) {
-        Write-Verbose "Starting job for target $Target"
-        $Job = Start-Job -ArgumentList $Target, $Credential, $VerbosePreference, $moduleInfo.Path -ScriptBlock {
-            param(
-                [string]$Target,
-                [PSCredential]$Credential,
-                $vp,
-                $mp
-            )
+    # Start jobs
+    # CHANGE OPTIONS HERE
+    $options = New-PSSessionOption
+    $UseSSL = $false
+    # $options = New-PSSessionOption -SkipCACheck -SkipCNCheck
 
-            Import-Module $mp -Verbose:$false
+    $totalCount = $Targets.Count
+    $attemptedCount = 0
+    $successCount = 0
+    $percent = 0
+    $Sessions = foreach ($Target in $Targets) {
+        try {
+            New-PSSession -ComputerName $Target -Credential $Credential -ErrorAction Stop -UseSSL:$UseSSL -SessionOption:$options    
+            Write-Verbose "[$Target] Connected"
+            $successCount++
+        }
+        catch {
+            Write-Warning "[$Target][-] Failed to connect"
+            Add-Content -Path $FailureFile -Value "$Target"
+        }
+        $attemptedCount++
+        $percent = ($attemptedCount / $totalCount) * 100
+        Write-Progress -Activity "Creating sessions" `
+            -Status "Tried $attemptedCount/$totalCount sessions, successfully created $successCount/$totalCount sessions, failed $($attemptedCount-$successCount)/$totalCount" `
+            -PercentComplete $percent
+    }
+
+
+    # Get script contents (workaround not to copy module remotely)
+    $ScriptsTable = @{}
+    $ScriptsFiles = Get-ChildItem -Path $moduleFolder/Public/Get-*.ps1
+    foreach ($file in $ScriptsFiles) {
+        Write-Verbose "[*] Scanning script file $($file.Name)" 
+        $ScriptsTable[$file.Name] = Get-Content $file.FullName -Raw
+    }
+
+    foreach ($Session in $Sessions) {
+        $Job = Invoke-Command -Session $Session -AsJob -ArgumentList $Session.ComputerName, $VerbosePreference, $ScriptsTable -ScriptBlock {
+            param(
+                $SessionName,
+                $vp,
+                $ScriptsTable
+            )
             $VerbosePreference = $vp
-            # Function logic here
-            Write-Verbose  "[*] $Target - Connection..."
-            try {
-                # CHANGE OPTIONS HERE
-                $options = New-PSSessionOption
-                $UseSSL = $false
-                # $options = New-PSSessionOption -SkipCACheck -SkipCNCheck
-                
-                $Session = New-PSSession -ComputerName $Target -Credential $Credential -ErrorAction Stop -UseSSL:$UseSSL -SessionOption:$options
-                Write-Verbose  "[+] $Target - Connected"
+            Write-Verbose "Got scripts: $ScriptsTable"
+            foreach ($scriptName in $ScriptsTable.Keys) {
+                Write-Verbose "[$SessionName][+] Loaded $scriptName"
+                Invoke-Expression $ScriptsTable[$scriptName]
             }
-            catch {
-                Write-Warning "[$($Target)] Could not connect as $($Credential.UserName) on $($Target)"
-                Write-Verbose "Options: UseSSL:$($UseSSL), Options:$($options)"
-                Write-Verbose "Reason: $_"
-                return
-            }
+            
+            Write-Verbose  "[$SessionName][+] Connected"
             try {
                 Write-Output "========== BitLocker check =========="
-                Get-BitLockerStatus -Session $Session
-                Write-Output "========== AV check =========="
-                Get-AVStatus -Session $Session
+                Write-Verbose  "[$SessionName][*] BitLocker check"
+                Get-BitLockerStatus -SessionName $SessionName
             }
             catch {
-                Write-Warning  "[-] $Target - Error"
-                Write-Verbose  "[-] $Target - Reason: $_"
-                Remove-PSSession $Session
+                Write-Warning  "[$SessionName][-] Error"
+                Write-Verbose  "[$SessionName][-] Reason: $_"
+            }
+            try {
+                Write-Output "========== AV check =========="
+                Write-Verbose  "[$SessionName][+] AV check"
+                Get-AVStatus -SessionName $SessionName
+            }
+            catch {
+                Write-Warning  "[$SessionName][-] Error"
+                Write-Verbose  "[$SessionName][-] Reason: $_"
             }
         }
         $Jobs[$Job.Id] = @{
             Job    = $Job
-            Target = $Target
+            Target = $Session.ComputerName
         }
     }
+    
+    # 5-minute timeout
+    $Timeout = [TimeSpan]::FromMinutes(5)
+    $CompletedCount = 0
+    $TimedOutCount = 0
+    $TotalJobs = $Jobs.Count
+    
+    Write-Host "[*] $TotalJobs remote jobs started, waiting for completion" -ForegroundColor Cyan
+    while ($Jobs.Count -gt 0) {
+        foreach ($entry in @($Jobs.Values)) {
+            $job = $entry.Job
+            $Target = $entry.Target
+            $Elapsed = (Get-Date) - $job.PSBeginTime
 
-    # Monitor progress
-    do {
-        $RunningJobs = $Jobs.Keys | Where-Object { $Jobs[$_].Job.State -eq 'Running' }
-        $FinishedJobs = $Jobs.Keys | Where-Object { $Jobs[$_].Job.State -in @('Completed', 'Failed', 'Stopped') }
-        $Total = $Jobs.Count
-        $Running = $RunningJobs.Count
-        $Finished = $FinishedJobs.Count
-        $Percent = $percent = [int](([Math]::Min(($Finished / $Total * 100), 100)))
+            if ($job.State -eq 'Completed') {
+                # Fetch results
+                $Result = Receive-Job -Job $job -ErrorAction SilentlyContinue
+            
+                # Append results to file immediately
+                Add-Content -Path $OutputFile -Value "============================================================ $Target ============================================================"
+                Add-Content -Path $OutputFile -Value $Result
+                Add-Content -Path $OutputFile -Value ""  # Blank line separator
+
+                Write-Host "[$Target][+] finished" -ForegroundColor Green
+            
+                # Cleanup
+                Remove-Job -Job $job -Force
+                $Jobs.Remove($job.Id)
+                $CompletedCount++
+            }
+            elseif ($Elapsed -ge $Timeout) {
+                # Timeout: kill job
+                Stop-Job -Job $job -Force
+                Remove-Job -Job $job -Force
+                Write-Warning "[-][$Target] timed out after $($Timeout.TotalMinutes) minutes"
 
 
-        Write-Progress -Activity "Running jobs, one per target..." `
-            -Status "$Finished of $Total complete, $Running Running..." `
-            -PercentComplete $Percent
+                Add-Content -Path $OutputFile -Value "============================================================ $Target ============================================================"
+                Add-Content -Path $OutputFile -Value "[$Target] TIMED OUT"
+                Add-Content -Path $OutputFile -Value ""  # Blank line separator
 
-        Start-Sleep -Milliseconds 200
-    } while ($Finished -lt $Total)
-
-    Write-Progress -Activity "Running jobs, one per target..." -Completed
-
-
-    foreach ($Entry in $Jobs.Values) {
-        $Target = $Entry.Target
-        $Job = $Entry.Job
-
-        $Result = Receive-Job -Job $Job | Out-String
-        Add-Content -Path $OutputFile -Value "============================================================ $Target ============================================================"
-        Add-Content -Path $OutputFile -Value $Result
-        Add-Content -Path $OutputFile -Value ""  # Blank line separator
-
-        Remove-Job -Job $Job
+                $Jobs.Remove($job.Id)
+                $CompletedCount++
+                $TimedOutCount++
+            }
+        }
+        $percent = ($CompletedCount / $TotalJobs) * 100
+        Write-Progress -Activity "Processing remote jobs" `
+            -Status "$CompletedCount of $TotalJobs completed" `
+            -PercentComplete $percent
+        Start-Sleep -Seconds 5
     }
 
+    # Cleanup sessions
+    if ($Sessions) {
+        Remove-PSSession -Session $Sessions -ErrorAction SilentlyContinue
+    }
+    
+    Write-Host "All jobs completed ($($CompletedCount-$TimedOutCount)) or timed out ($TimedOutCount).`nResults stored in $OutputFile" -ForegroundColor Cyan
 }
